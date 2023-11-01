@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ASL</title>
+    <!-- Bootstrap CSS CDN link -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
+    <style>
+        * {
+            padding: 0 !important;
+        }
+
+        body {
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            height: 77%;
+            box-shadow: 3px 3px 10px 0px #dedede;
+        }
+
+        .video-box {
+            height: 100%;
+            background-color: #f0f0f0;
+        }
+
+        .video-box h3 {
+            position: absolute;
+            top: 43%;
+            left: 20%;
+        }
+
+        .video-box p {
+            position: absolute;
+            top: 48%;
+            left: 42%;
+        }
+
+        .video-box #streamLoading {
+            margin: 0;
+            position: absolute;
+            top: 46%;
+            left: 38%;
+        }
+
+        .video-box #streamErr {
+            margin: 0;
+            position: absolute;
+            top: 46%;
+            left: 38%;
+            font-size: large;
+            font-weight: bold;
+        }
+
+
+        video {
+            /* Flip the video horizontally */
+            display: grid;
+            margin: 0 auto 0 auto;
+            transform: scaleX(-1);
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .chat-box {
+            height: 100%;
+            background-color: #ffffff;
+        }
+
+        .chat-display {
+            max-height: 100%;
+            height: 100%;
+            overflow: hidden;
+            flex: 1;
+            display: flex;
+            flex-direction: column-reverse;
+            scroll-behavior: smooth;
+        }
+
+        .chat-display p {
+            animation: fadeIn 2s;
+            scroll-behavior: smooth;
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .btn-start-stream {
+            margin-top: 10px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 1%;
+            right: 1%;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- title -->
+    <center>
+        <h2>Sign Language Detection</h2>
+    </center>
+
+    <!-- stream box -->
+    <div class="container row">
+        <div class="video-box col-md-9">
+            <div id="streamThumbTxt">
+                <h3>Welcome to Camera Streaming</h3><br>
+                <p>--made with AI</p>
+            </div>
+            <!-- stream loading spinner -->
+            <div hidden id="streamLoading" class="spinner-grow" role="status"></div>
+            <!-- stream errors -->
+            <p hidden id="streamErr" class="text-danger"></p>
+
+            <!-- video source -->
+            <video id="video" autoplay></video>
+        </div>
+        <div class="chat-box col-md-3">
+            <!-- msgs -->
+            <div id="chatDisplay" class="p-2 chat-display">
+            </div>
+        </div>
+    </div>
+    <div class="flex justify-center space-x-4 mt-4">
+        <button id="startButton" class="btn btn-primary text-white py-2 px-4 rounded">Start
+            Streaming</button>
+        <button id="stopButton" class="btn btn-danger text-white py-2 px-4 rounded hidden" disabled>Stop
+            Streaming</button>
+    </div>
+
+    <!-- scripts -->
+    <script>
+        // let socket;
+        let socket ;
+        const videoElement = document.getElementById('video');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const chatDisplay = document.getElementById('chatDisplay');
+        const streamThumbTxt = document.getElementById('streamThumbTxt');
+        const streamLoading = document.getElementById('streamLoading');
+        const streamErr = document.getElementById('streamErr');
+
+        let stream;
+        let frameInterval;
+        let debugInterval;
+
+
+        function generateCustomSocketID() {
+            return Math.random().toString(36).substr(2, 9);
+        }
+
+        startButton.addEventListener('click', async () => {
+            streamThumbTxt.hidden = true
+            streamLoading.hidden = false
+            streamErr.hidden = true
+
+            const constraints = {
+                video: {
+                    width: {
+                        min: 1280,
+                        ideal: 1920,
+                        max: 2560,
+                    },
+                    height: {
+                        min: 720,
+                        ideal: 1080,
+                        max: 1440,
+                    },
+                },
+            }
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                // Attach the stream to the video element
+                videoElement.srcObject = stream;
+                room = generateCustomSocketID();
+                socket = io({
+                    debug: true,
+                    reconnection:true,
+                });
+
+                startButton.classList.add('hidden');
+                stopButton.classList.remove('hidden');
+                stopButton.disabled = false;
+
+                setTimeout(() => {
+                    if (socket.connected) {
+                        frameInterval = setInterval(sendFrame, 350);
+                    }
+                }, 1000);
+                
+                streamLoading.hidden = true
+                chatDisplay.classList.remove('hidden');
+
+                socket.on("frame_processed", result => {
+                    console.log('done');
+                    const prediction = result;
+                    const newEle = document.createElement("p");
+                    newEle.innerText = "Prediction: " + prediction;
+                    chatDisplay.insertAdjacentElement("afterbegin", newEle);
+                    chatDisplay.scrollTop = chatDisplay.scrollHeight;
+                });
+
+            } catch (error) {
+                streamErr.hidden = false
+                streamErr.innerText = "Error accessing camera: " + error
+                streamLoading.hidden = true
+                console.error('Error accessing camera:', error);
+                if (socket){
+                    socket.disconnect();
+                }
+            }
+        });
+
+        stopButton.addEventListener("click", () => {
+            if (stream) {
+                const tracks = stream.getTracks();
+                tracks.forEach(track => track.stop());
+                stream = null;
+                videoElement.srcObject = null;
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                startButton.classList.remove('hidden');
+                stopButton.classList.add('hidden');
+                streamThumbTxt.hidden = false
+                clearInterval(frameInterval);
+                clearInterval(debugInterval);
+                // Close the socket connection
+                try {
+                    socket.disconnect();
+                } catch (error) {
+                    console.log("error",error)
+                }
+            }
+        });
+
+        function sendFrame() {
+            if (stream && stream.active) {
+                const canvas = document.createElement("canvas");
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                const context = canvas.getContext("2d");
+                context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                const frameData = canvas.toDataURL("image/jpeg");
+                if (socket && socket.connected){
+                    socket.emit("process_frame", {
+                    frame: frameData
+                }); 
+                }
+            }
+        }
+        
+    </script>
+
+    <!-- Bootstrap JS and Popper.js CDN links -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous">
+    </script>
+</body>
+
+</html>
