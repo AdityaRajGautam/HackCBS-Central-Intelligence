@@ -3,16 +3,23 @@ import os
 import logging
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import random
-
+import cv2
+import base64
+import numpy as np
+import face_recognition
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
-socketio = SocketIO(app)
+socketio = SocketIO(app,cors_allowed_origins="*")
 
+users_data={}
+user_data = {}
 
 # Load the model
 logger.info("Model loaded successfully")
@@ -30,6 +37,7 @@ def index():
 def handle_connect():
     user_sid = session.get("user_id")
     join_room(user_sid)
+    user_data[user_sid] = {"frames": []}
     print("Client connected started", user_sid)
 
 
@@ -38,14 +46,63 @@ def handle_disconnect():
     print("Client disconnected")
     user_sid = session.get("user_id")
     leave_room(user_sid)
-    print(f"Client with SID {user_sid} disconnected")
+    if user_sid in user_data:
+        del user_data[user_sid]
+        print(f"Client with SID {user_sid} disconnected")
 
 @socketio.on("process_frame")
 def process_frame(data):
+    global user_data
     user_sid = session.get("user_id")
-    emit("frame_processed", user_sid, room=user_sid) # Emit to the specific client
+    print(f"Processing frame for client with SID {user_sid}")
+    if user_sid in user_data:
+        frame_data = data.get("frame", "")
+        if frame_data:
+            image_data = frame_data.split(",")[1]
+            decoded_data = base64.b64decode(image_data)
+            nparr = np.frombuffer(decoded_data, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
 
+            if len(faces)>0:
+                for (x, y, w, h) in faces:
+                    name = recognize_face(frame[y:y+h, x:x+w])
+                    emit("frame_processed", name, room=user_sid) # Emit to the specific client
+                    emit("reply", "hii nikhil", room='na52m') # Emit to the specific client
+
+
+def recognize_face(face_image):
+    rgb_image = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
+    face_locations = face_recognition.face_locations(rgb_image)
+    
+    if len(face_locations) == 0:
+        return "No face detected!"  # No faces found
+    
+    face_encodings = face_recognition.face_encodings(rgb_image, face_locations)
+
+    for face_encoding in face_encodings:
+        for name, known_encoding in users_data.items():
+            # Compare the detected face with known faces
+            match = face_recognition.compare_faces([known_encoding], face_encoding, tolerance=0.5)
+            if match[0]:
+                face_filename = f"{name}_.jpg"
+                cv2.imwrite(face_filename, face_image)
+                return name, face_filename  # Return the name of the recognized user and the filename
+    # If no recognized faces are found, return "Unknown"
+    return "Unkown"
+
+@socketio.on("msg")
+def msg(data):
+    print(data)
+    emit("reply", "hii nikhil") # Emit to the specific client
 
 if __name__ == "__main__":
+    image = face_recognition.load_image_file('nikhil.jpeg')
+    image2 = face_recognition.load_image_file('dp.jpeg')
+    face_encodingg = face_recognition.face_encodings(image)[0]  # Assuming there's only one face per image
+    face_encodingg2 = face_recognition.face_encodings(image2)[0]  # Assuming there's only one face per image
+    users_data['dp.jpg'] = face_encodingg2.tolist()
+    users_data['nikhil.jpg'] = face_encodingg.tolist()
     host = os.getenv("HOST", "127.0.0.1")
     socketio.run(app, host="0.0.0.0", port=8000, log_output=True,debug=True)
