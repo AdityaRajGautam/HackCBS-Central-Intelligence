@@ -152,7 +152,9 @@
     <!-- scripts -->
     <script>
         // let socket;
-        let socket ;
+        let socket;
+        var lat
+        var lon;
         const videoElement = document.getElementById('video');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
@@ -161,14 +163,18 @@
         const streamLoading = document.getElementById('streamLoading');
         const streamErr = document.getElementById('streamErr');
 
+        navigator.geolocation.getCurrentPosition(function (position) {
+            const {
+                latitude,
+                longitude
+            } = position.coords;
+            lat=latitude
+            lon=longitude
+        });
+
         let stream;
         let frameInterval;
         let debugInterval;
-
-
-        function generateCustomSocketID() {
-            return Math.random().toString(36).substr(2, 9);
-        }
 
         startButton.addEventListener('click', async () => {
             streamThumbTxt.hidden = true
@@ -193,10 +199,9 @@
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 // Attach the stream to the video element
                 videoElement.srcObject = stream;
-                room = generateCustomSocketID();
                 socket = io({
                     debug: true,
-                    reconnection:true,
+                    reconnection: true,
                 });
 
                 startButton.classList.add('hidden');
@@ -208,12 +213,11 @@
                         frameInterval = setInterval(sendFrame, 1000);
                     }
                 }, 1000);
-                
+
                 streamLoading.hidden = true
                 chatDisplay.classList.remove('hidden');
 
                 socket.on("frame_processed", result => {
-                    console.log('done');
                     const prediction = result;
                     const newEle = document.createElement("p");
                     newEle.innerText = "Prediction: " + prediction;
@@ -226,7 +230,7 @@
                 streamErr.innerText = "Error accessing camera: " + error
                 streamLoading.hidden = true
                 console.error('Error accessing camera:', error);
-                if (socket){
+                if (socket) {
                     socket.disconnect();
                 }
             }
@@ -249,7 +253,7 @@
                 try {
                     socket.disconnect();
                 } catch (error) {
-                    console.log("error",error)
+                    console.log("error", error)
                 }
             }
         });
@@ -262,14 +266,17 @@
                 const context = canvas.getContext("2d");
                 context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
                 const frameData = canvas.toDataURL("image/jpeg");
-                if (socket && socket.connected){
+                if (socket && socket.connected) {
                     socket.emit("process_frame", {
-                    frame: frameData
-                }); 
+                        frame: frameData,
+                        location: {
+                            lat,
+                            lon
+                        }
+                    });
                 }
             }
         }
-        
     </script>
 
     <!-- Bootstrap JS and Popper.js CDN links -->
