@@ -73,12 +73,12 @@ def process_frame(data):
             if len(faces) > 0:
                 for (x, y, w, h) in faces:
                     name = recognize_face(
-                        frame[y:y+h, x:x+w], data.get('location', None), image_data)
+                        frame[y:y+h, x:x+w], data.get('location', None),data.get('time', ""), image_data)
                     # Emit to the specific client
                     emit("frame_processed", name, room=user_sid)
 
 
-def recognize_face(face_image, location, image_data):
+def recognize_face(face_image, location, time,image_data):
     rgb_image = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
     face_locations = face_recognition.face_locations(rgb_image)
 
@@ -93,10 +93,12 @@ def recognize_face(face_image, location, image_data):
             match = face_recognition.compare_faces(
                 [known_encoding], face_encoding, tolerance=0.5)
             if match[0]:
+                print(location)
                 emit("reply", json.dumps({
-                    'name': name,
+                    'threatId': name,
                     'location': location,
-                    'image': image_data
+                    'image': image_data,
+                    'time': time,
                 }), room='na52m')  # Emit to the specific client
                 # do something if face matches
                 return name

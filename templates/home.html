@@ -270,9 +270,10 @@
                     socket.emit("process_frame", {
                         frame: frameData,
                         location: {
-                            lat,
-                            lon
-                        }
+                            'lat':lat,
+                            'long':lon,
+                        },
+                        'time':new Date().toLocaleTimeString()
                     });
                 }
             }
