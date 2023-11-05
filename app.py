@@ -75,7 +75,7 @@ def process_frame(data):
                     name = recognize_face(
                         frame[y:y+h, x:x+w], data.get('location', None),data.get('time', ""), image_data)
                     # Emit to the specific client
-                    emit("frame_processed", name, room=user_sid)
+                    emit("frame_processed", "sending frames..", room=user_sid)
 
 
 def recognize_face(face_image, location, time,image_data):
@@ -94,7 +94,7 @@ def recognize_face(face_image, location, time,image_data):
                 [known_encoding], face_encoding, tolerance=0.5)
             if match[0]:
                 print(location)
-                emit("reply", json.dumps({
+                emit("frame_processed_controller", json.dumps({
                     'threatId': name,
                     'location': location,
                     'image': image_data,
@@ -106,11 +106,11 @@ def recognize_face(face_image, location, time,image_data):
     return "Unkown"
 
 
-@socketio.on("msg")
-def msg(data):
+@socketio.on("connect_control_room")
+def connect_control_room(data):
     user_sid = request.args['user_id']
     join_room(user_sid)
-    emit("reply", user_sid)  # Emit to the specific client
+    emit("connected", user_sid)  # Emit to the specific client
 
 
 if __name__ == "__main__":

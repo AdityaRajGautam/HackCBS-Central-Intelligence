@@ -168,8 +168,8 @@
                 latitude,
                 longitude
             } = position.coords;
-            lat=latitude
-            lon=longitude
+            lat = latitude
+            lon = longitude
         });
 
         let stream;
@@ -270,14 +270,19 @@
                     socket.emit("process_frame", {
                         frame: frameData,
                         location: {
-                            'lat':lat,
-                            'long':lon,
+                            'lat': lat,
+                            'long': lon,
                         },
-                        'time':new Date().toLocaleTimeString()
+                        'time': new Date().toLocaleTimeString()
                     });
                 }
             }
         }
+
+        window.onbeforeunload = function () {
+            // Emit the "disconnect_tab" event when the tab is closed
+            socket.emit("disconnect");
+        };
     </script>
 
     <!-- Bootstrap JS and Popper.js CDN links -->
