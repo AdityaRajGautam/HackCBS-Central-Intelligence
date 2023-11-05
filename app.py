@@ -53,11 +53,21 @@ def save_image(image, filename):
     image_path = os.path.join(media_folder_path, filename)
     image.save(image_path)
 
-# Create a new target user
+
+def isAuthorized():
+    uid = request.args.get('user_id')
+    if uid == "szg0IndRBkZVCFDfUqYh73oOoG72":
+        return True
+    return jsonify({"message": "not authorized!"})
 
 
 @app.route('/create_user', methods=['POST'])
 def create_user():
+    isAuth = isAuthorized()
+    if isAuth == True:
+        pass
+    else:
+        return isAuth
     data = request.form
 
     user_id = data.get('id')
@@ -91,6 +101,11 @@ def create_user():
 
 @app.route('/delete_user/<user_id>', methods=['GET'])
 def delete_user(user_id):
+    isAuth = isAuthorized()
+    if isAuth == True:
+        pass
+    else:
+        return isAuth
     if user_id in users_data:
         # Remove the user's image file from the media folder
         image_filename = users_data[user_id]['image_filename']
@@ -103,9 +118,15 @@ def delete_user(user_id):
         return jsonify({"message": f"User with ID {user_id} has been deleted"})
     else:
         return jsonify({"error": f"User with ID {user_id} not found"}), 404
-    
+
+
 @app.route('/user_ids', methods=['GET'])
 def get_user_ids():
+    isAuth = isAuthorized()
+    if isAuth == True:
+        pass
+    else:
+        return isAuth
     user_ids = list(users_data.keys())
     return jsonify(user_ids)
 
@@ -154,10 +175,10 @@ def recognize_face(face_image, location, time, image_data):
                     'location': location,
                     'image': image_data,
                     'time': time,
-                }), room='na52m')  # Emit to the specific client
+                }), room='szg0IndRBkZVCFDfUqYh73oOoG72')  # Emit to the specific client
 
                 # do something if face matches
-                print(f"tagrtet {name} is detected at location {location}")
+                print(f"target {name} is detected at location {location}")
                 return name
     # If no recognized faces are found, return "Unknown"
     return "Unkown"
