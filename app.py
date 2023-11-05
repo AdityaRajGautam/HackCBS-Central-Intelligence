@@ -7,12 +7,14 @@ import os
 import base64
 import numpy as np
 import face_recognition
+from flask_cors import CORS
 
 # load cv2 modal
 face_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})
 media_folder_path = 'media'
 app.config['SECRET_KEY'] = os.urandom(24)
 socketio = SocketIO(app, cors_allowed_origins="*")
