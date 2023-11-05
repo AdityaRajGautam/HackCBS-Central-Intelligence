@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create User Form</title>
+</head>
+<body>
+    <h2>Create User</h2>
+    <form action="http://127.0.0.1:8000/create_user" method="POST" enctype="multipart/form-data">
+        <label for="id">User ID:</label>
+        <input type="text" name="id" id="id" required><br><br>
+
+        <label for="name">User Name:</label>
+        <input type="text" name="name" id="name" required><br><br>
+
+        <label for="image">User Image:</label>
+        <input type="file" name="image" id="image" accept="image/jpeg, image/jpg" required><br><br>
+
+        <input type="submit" value="Create User">
+    </form>
+</body>
+</html>

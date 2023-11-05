@@ -1,30 +1,24 @@
-from flask import Flask, session, render_template, request
-import os
-import logging
+from flask import Flask, session, render_template, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import random
+import json
 import cv2
+import os
 import base64
 import numpy as np
 import face_recognition
-import json
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
+# load cv2 modal
 face_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 app = Flask(__name__)
+media_folder_path = 'media'
 app.config['SECRET_KEY'] = os.urandom(24)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 users_data = {}
 user_data = {}
-
-# Load the model
-logger.info("Model loaded successfully")
 
 
 @app.route("/")
@@ -32,7 +26,6 @@ def index():
     user_id = session.get("user_id")
     if not user_id:
         session["user_id"] = random.randint(1, 100000)
-    logger.info("Rendering index page")
     return render_template("home.html")
 
 
@@ -54,6 +47,69 @@ def handle_disconnect():
         print(f"Client with SID {user_sid} disconnected")
 
 
+# Function to save an image with a specific filename format
+def save_image(image, filename):
+    print(image, filename)
+    image_path = os.path.join(media_folder_path, filename)
+    image.save(image_path)
+
+# Create a new target user
+
+
+@app.route('/create_user', methods=['POST'])
+def create_user():
+    data = request.form
+
+    user_id = data.get('id')
+    user_name = data.get('name')
+    user_image = request.files['image']
+
+    if user_id is None or user_name is None or user_image is None:
+        return jsonify({"error": "Incomplete data"}), 400
+
+    # Create a unique filename based on user ID and name
+    image_filename = f"{user_id}_{user_name}.jpeg"
+
+    # Save the image to the media folder
+    save_image(user_image, image_filename)
+
+    # Perform face recognition and store the face encoding in the users_data dictionary
+    image = face_recognition.load_image_file(
+        os.path.join(media_folder_path, image_filename))
+    face_encodings = face_recognition.face_encodings(image)
+
+    if face_encodings:
+        # Assuming there's only one face per image
+        face_encoding = face_encodings[0]
+        users_data[user_id] = {
+            'image_filename': filename,
+            'encodings': face_encoding.tolist()
+        }
+
+    return jsonify({"message": "User created successfully"})
+
+
+@app.route('/delete_user/<user_id>', methods=['GET'])
+def delete_user(user_id):
+    if user_id in users_data:
+        # Remove the user's image file from the media folder
+        image_filename = users_data[user_id]['image_filename']
+        image_path = os.path.join(media_folder_path, image_filename)
+        os.remove(image_path)
+
+        # Remove the user's data from the users_data dictionary
+        del users_data[user_id]
+
+        return jsonify({"message": f"User with ID {user_id} has been deleted"})
+    else:
+        return jsonify({"error": f"User with ID {user_id} not found"}), 404
+    
+@app.route('/user_ids', methods=['GET'])
+def get_user_ids():
+    user_ids = list(users_data.keys())
+    return jsonify(user_ids)
+
+
 @socketio.on("process_frame")
 def process_frame(data):
     global user_data
@@ -72,13 +128,13 @@ def process_frame(data):
 
             if len(faces) > 0:
                 for (x, y, w, h) in faces:
-                    name = recognize_face(
-                        frame[y:y+h, x:x+w], data.get('location', None),data.get('time', ""), image_data)
+                    recognize_face(
+                        frame[y:y+h, x:x+w], data.get('location', None), data.get('time', ""), image_data)
                     # Emit to the specific client
                     emit("frame_processed", "sending frames..", room=user_sid)
 
 
-def recognize_face(face_image, location, time,image_data):
+def recognize_face(face_image, location, time, image_data):
     rgb_image = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
     face_locations = face_recognition.face_locations(rgb_image)
 
@@ -91,16 +147,17 @@ def recognize_face(face_image, location, time,image_data):
         for name, known_encoding in users_data.items():
             # Compare the detected face with known faces
             match = face_recognition.compare_faces(
-                [known_encoding], face_encoding, tolerance=0.5)
+                [known_encoding['encodings']], face_encoding, tolerance=0.5)
             if match[0]:
-                print(location)
                 emit("frame_processed_controller", json.dumps({
                     'threatId': name,
                     'location': location,
                     'image': image_data,
                     'time': time,
                 }), room='na52m')  # Emit to the specific client
+
                 # do something if face matches
+                print(f"tagrtet {name} is detected at location {location}")
                 return name
     # If no recognized faces are found, return "Unknown"
     return "Unkown"
@@ -114,13 +171,20 @@ def connect_control_room(data):
 
 
 if __name__ == "__main__":
-    image = face_recognition.load_image_file('nikhil.jpeg')
-    image2 = face_recognition.load_image_file('dp.jpeg')
-    face_encodingg = face_recognition.face_encodings(
-        image)[0]  # Assuming there's only one face per image
-    face_encodingg2 = face_recognition.face_encodings(
-        image2)[0]  # Assuming there's only one face per image
-    users_data['dp.jpg'] = face_encodingg2.tolist()
-    users_data['nikhil.jpg'] = face_encodingg.tolist()
+    # List all files in the media folder
+    for filename in os.listdir(media_folder_path):
+        if filename.endswith(".jpeg"):
+            image_path = os.path.join(media_folder_path, filename)
+            image = face_recognition.load_image_file(image_path)
+            face_encodings = face_recognition.face_encodings(image)
+
+            if face_encodings:
+                # Assuming there's only one face per image
+                face_encoding = face_encodings[0]
+                users_data[filename.split('_')[0]] = {
+                    'image_filename': filename,
+                    'encodings': face_encoding.tolist()
+                }
+
     host = os.getenv("HOST", "127.0.0.1")
     socketio.run(app, host="0.0.0.0", port=8000, log_output=True, debug=True)
